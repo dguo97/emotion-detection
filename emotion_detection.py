@@ -6,6 +6,7 @@ classify the emotion of a frame captured from your webcam.
 Usage:
     python emotion_detection.py train   # train and save the model
     python emotion_detection.py predict # capture a webcam frame and classify it
+    python emotion_detection.py predict --image face.jpg  # classify an image file
     python emotion_detection.py all     # train, then predict (default)
 """
 
@@ -116,6 +117,20 @@ def load_trained():
     return model, class_labels
 
 
+def predict_image(model, class_labels, image_path):
+    """Classify the emotion in an image file (works without a webcam, e.g. Colab)."""
+    gray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if gray is None:
+        raise FileNotFoundError(f"Could not read image: {image_path}")
+    resized = cv2.resize(gray, IMG_SIZE)
+    batch = (resized.astype("float32") / 255.0)[np.newaxis, :, :, np.newaxis]
+
+    predictions = model.predict(batch)
+    class_idx = int(np.argmax(predictions[0]))
+    confidence = predictions[0][class_idx] * 100
+    print(f"Detected Emotion: {class_labels[class_idx]} ({confidence:.2f}%)")
+
+
 def capture_and_predict(model, class_labels):
     """Show the webcam feed; press SPACE to classify a frame, 'q' to quit."""
     cap = cv2.VideoCapture(0)
@@ -165,6 +180,11 @@ def main():
     parser.add_argument("--test-dir", default="emotion_detection_data/test")
     parser.add_argument("--epochs", type=int, default=15)
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument(
+        "--image",
+        default=None,
+        help="classify this image file instead of using the webcam",
+    )
     args = parser.parse_args()
 
     if args.mode in ("train", "all"):
@@ -175,7 +195,10 @@ def main():
         model, class_labels = load_trained()
 
     if args.mode in ("predict", "all"):
-        capture_and_predict(model, class_labels)
+        if args.image:
+            predict_image(model, class_labels, args.image)
+        else:
+            capture_and_predict(model, class_labels)
 
 
 if __name__ == "__main__":

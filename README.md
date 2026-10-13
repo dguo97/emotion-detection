@@ -50,6 +50,9 @@ python emotion_detection.py train --epochs 20
 
 # Predict from the webcam using a previously saved model
 python emotion_detection.py predict
+
+# Predict from an image file instead of the webcam
+python emotion_detection.py predict --image face.jpg
 ```
 
 Options:
@@ -60,12 +63,70 @@ Options:
 | `--test-dir` | `emotion_detection_data/test` | Validation images directory |
 | `--epochs` | `15` | Number of training epochs |
 | `--batch-size` | `64` | Batch size |
+| `--image` | none | Classify this image file instead of using the webcam |
 
 Training writes `emotion_model.keras` and `class_labels.json` to the working directory.
 
+## Running on Google Colab
+
+Colab already ships with TensorFlow and OpenCV, so there is nothing to install. Note that Colab cannot open a local webcam window, so predictions are made on uploaded image files instead.
+
+1. Open a new notebook at [colab.research.google.com](https://colab.research.google.com) and switch on a GPU: **Runtime > Change runtime type > GPU**.
+
+2. Clone the repo:
+
+   ```python
+   !git clone https://github.com/dguo97/emotion-detection.git
+   %cd emotion-detection
+   ```
+
+3. Get the dataset into `emotion_detection_data/` (pick one):
+
+   **Option A: Kaggle** (the image-folder version of FER-2013). Upload your `kaggle.json` API token when prompted:
+
+   ```python
+   from google.colab import files
+   files.upload()  # select kaggle.json
+   !mkdir -p ~/.kaggle && mv kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
+   !kaggle datasets download -d msambare/fer2013 -p emotion_detection_data --unzip
+   ```
+
+   **Option B: Google Drive.** If you keep the `train/` and `test/` folders in Drive:
+
+   ```python
+   from google.colab import drive
+   drive.mount('/content/drive')
+   !cp -r /content/drive/MyDrive/emotion_detection_data .
+   ```
+
+   Copying to Colab's local disk makes training much faster than reading from Drive.
+
+4. Train the model:
+
+   ```python
+   !python emotion_detection.py train --epochs 15
+   ```
+
+5. Classify an image. Upload a photo of a face, then run:
+
+   ```python
+   from google.colab import files
+   files.upload()  # select e.g. face.jpg
+   !python emotion_detection.py predict --image face.jpg
+   ```
+
+6. Optional: download the trained model to reuse elsewhere:
+
+   ```python
+   files.download('emotion_model.keras')
+   files.download('class_labels.json')
+   ```
+
+Colab sessions are temporary, so save the model to Drive or download it before the runtime disconnects.
+
 ## Notes
 
-- The webcam demo classifies the whole frame, not a cropped face. For better accuracy, add face detection (for example OpenCV's Haar cascades) and crop to the face before resizing.
+- The webcam demo and image prediction classify the whole image, not a cropped face. For better accuracy, add face detection (for example OpenCV's Haar cascades) and crop to the face before resizing.
 - This is a learning project, not a production-grade emotion recogniser.
 
 ## License

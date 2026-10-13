@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Data and trained artefacts
+emotion_detection_data/
+*.keras
+*.h5
+class_labels.json
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

@@ -116,8 +116,15 @@ def train(train_dir, test_dir, epochs=30, batch_size=64):
 
     callbacks = [
         # Stop when validation accuracy stops improving and keep the best weights.
+        # start_from_epoch gives training a warm-up: in the first epochs the batch
+        # norm statistics are still settling, so validation scores are unreliable
+        # and stopping early can lock in a model that guesses a single emotion.
         EarlyStopping(
-            monitor="val_accuracy", patience=10, restore_best_weights=True, verbose=1
+            monitor="val_accuracy",
+            patience=10,
+            restore_best_weights=True,
+            start_from_epoch=15,
+            verbose=1,
         ),
         # Lower the learning rate when validation loss plateaus.
         ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=3, verbose=1),

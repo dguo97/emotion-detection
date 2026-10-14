@@ -89,7 +89,8 @@ The model follows a standard deep-learning pipeline for image classification:
    * **Optimizer:** Adam iteratively updates network weights via backpropagation to minimize error (15 epochs by default).
 
 4. **Inference:**
-   * Press SPACE in the webcam window to grab a frame, or pass an image file. It is converted to grayscale, resized to 48x48 and classified.
+   * Press SPACE in the webcam window to grab a frame, or pass an image file. It is converted to grayscale, the largest face is detected (OpenCV Haar cascade) and cropped, then resized to 48x48 and classified. If no face is found, the centre of the image is used.
+   * The probability of every emotion class is printed, not just the top one, so you can see how confident the model is.
 
 ---
 
@@ -137,7 +138,9 @@ Training writes `emotion_model.keras` and `class_labels.json` to the working dir
 
 ## 📝 Notes
 
-* The webcam demo and image prediction classify the whole image, not a cropped face. For better accuracy, add face detection (for example OpenCV's Haar cascades) and crop to the face before resizing.
+* Training images are tight 48x48 face crops, so predictions work best on a clear, front-facing, well-lit face. Faces are cropped automatically before prediction.
+* This is a small CNN trained for 15 epochs, so expect roughly 55-65% validation accuracy on FER-2013, with `happy` and `surprise` usually easier than `fear`, `sad` and `disgust`. Training more epochs or a deeper network will help.
+* If every image gives the same emotion, check the validation accuracy printed at the end of training: a value near 25% or lower suggests the model hasn't learned much.
 * This is a learning project, not a production-grade emotion recogniser.
 
 ---

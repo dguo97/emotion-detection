@@ -117,18 +117,59 @@ def load_trained():
     return model, class_labels
 
 
+_FACE_CASCADE = None
+
+
+def get_face_cascade():
+    """Load OpenCV's bundled Haar cascade face detector (once)."""
+    global _FACE_CASCADE
+    if _FACE_CASCADE is None:
+        path = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
+        _FACE_CASCADE = cv2.CascadeClassifier(path)
+    return _FACE_CASCADE
+
+
+def preprocess_face(gray):
+    """Crop the largest detected face and resize it to 48x48, scaled to [0, 1].
+
+    The training images are tight face crops, so feeding the model a whole
+    (and possibly non-square) photo gives poor predictions. If no face is
+    found, the largest centred square is used instead.
+    """
+    faces = get_face_cascade().detectMultiScale(
+        gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60)
+    )
+    if len(faces) > 0:
+        x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+        crop = gray[y : y + h, x : x + w]
+    else:
+        print("No face detected; using the centre of the image instead.")
+        height, width = gray.shape
+        side = min(height, width)
+        top, left = (height - side) // 2, (width - side) // 2
+        crop = gray[top : top + side, left : left + side]
+    resized = cv2.resize(crop, IMG_SIZE, interpolation=cv2.INTER_AREA)
+    return resized.astype("float32") / 255.0
+
+
+def classify(model, class_labels, gray):
+    """Print the predicted emotion and the probability of every class."""
+    batch = preprocess_face(gray)[np.newaxis, :, :, np.newaxis]
+    probabilities = model.predict(batch, verbose=0)[0]
+    order = np.argsort(probabilities)[::-1]
+    best = order[0]
+    print(f"Detected Emotion: {class_labels[best]} ({probabilities[best] * 100:.2f}%)")
+    print("All probabilities:")
+    for i in order:
+        print(f"  {class_labels[i]:<10} {probabilities[i] * 100:6.2f}%")
+
+
 def predict_image(model, class_labels, image_path):
     """Classify the emotion in an image file (works without a webcam, e.g. Colab)."""
     gray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if gray is None:
         raise FileNotFoundError(f"Could not read image: {image_path}")
-    resized = cv2.resize(gray, IMG_SIZE)
-    batch = (resized.astype("float32") / 255.0)[np.newaxis, :, :, np.newaxis]
-
-    predictions = model.predict(batch)
-    class_idx = int(np.argmax(predictions[0]))
-    confidence = predictions[0][class_idx] * 100
-    print(f"Detected Emotion: {class_labels[class_idx]} ({confidence:.2f}%)")
+    classify(model, class_labels, gray)
 
 
 def capture_and_predict(model, class_labels):
@@ -151,14 +192,7 @@ def capture_and_predict(model, class_labels):
         key = cv2.waitKey(1) & 0xFF
         if key == 32:  # SPACE
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            resized = cv2.resize(gray, IMG_SIZE)
-            normalized = resized.astype("float32") / 255.0
-            batch = normalized[np.newaxis, :, :, np.newaxis]
-
-            predictions = model.predict(batch)
-            class_idx = int(np.argmax(predictions[0]))
-            confidence = predictions[0][class_idx] * 100
-            print(f"Detected Emotion: {class_labels[class_idx]} ({confidence:.2f}%)")
+            classify(model, class_labels, gray)
             break
         elif key == ord("q"):
             break

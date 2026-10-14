@@ -29,7 +29,9 @@ emotion_detection_data/
 
 Class names are taken from the folder names.
 
-## Installation
+## Installation (local machine)
+
+Run these in a terminal. They will not work if pasted into a Colab cell; for Colab, jump to [Running on Google Colab](#running-on-google-colab).
 
 ```bash
 git clone https://github.com/dguo97/emotion-detection.git

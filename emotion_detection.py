@@ -17,6 +17,7 @@ import os
 import cv2
 import numpy as np
 from tensorflow.keras.layers import (
+    BatchNormalization,
     Conv2D,
     Dense,
     Dropout,
@@ -60,16 +61,21 @@ def build_generators(train_dir, test_dir, batch_size=64):
 
 
 def build_model(num_classes):
-    """Two conv/pool blocks followed by a dense classifier head."""
+    """Three conv/pool blocks (with batch norm) and a dense classifier head."""
     model = Sequential(
         [
             Input(shape=(*IMG_SIZE, 1)),
-            Conv2D(32, (3, 3), activation="relu"),
+            Conv2D(32, (3, 3), padding="same", activation="relu"),
+            BatchNormalization(),
             MaxPooling2D(pool_size=(2, 2)),
-            Conv2D(64, (3, 3), activation="relu"),
+            Conv2D(64, (3, 3), padding="same", activation="relu"),
+            BatchNormalization(),
+            MaxPooling2D(pool_size=(2, 2)),
+            Conv2D(128, (3, 3), padding="same", activation="relu"),
+            BatchNormalization(),
             MaxPooling2D(pool_size=(2, 2)),
             Flatten(),
-            Dense(128, activation="relu"),
+            Dense(256, activation="relu"),
             Dropout(0.5),
             Dense(num_classes, activation="softmax"),
         ]
@@ -89,8 +95,14 @@ def train(train_dir, test_dir, epochs=15, batch_size=64):
     )
     model = build_model(train_generator.num_classes)
 
+    # FER-2013 is imbalanced (lots of "happy", very few "disgust"); weight the
+    # loss so rare classes are not ignored.
+    counts = np.bincount(train_generator.classes, minlength=train_generator.num_classes)
+    class_weight = {i: len(train_generator.classes) / (len(counts) * c) for i, c in enumerate(counts)}
+
     model.fit(
         train_generator,
+        class_weight=class_weight,
         steps_per_epoch=train_generator.samples // train_generator.batch_size,
         epochs=epochs,
         validation_data=test_generator,
@@ -117,18 +129,63 @@ def load_trained():
     return model, class_labels
 
 
+def crop_face(gray, margin=0.1):
+    """Return a square crop around the largest detected face.
+
+    The training images are tight 48x48 face crops, so the model must be given
+    the same kind of input. Feeding a whole photo shrinks the face to a few
+    pixels and the model falls back on its default guess (usually "sad").
+    If no face is found, the largest centred square is used instead.
+    """
+    if not hasattr(cv2, "CascadeClassifier"):
+        raise RuntimeError(
+            "This OpenCV build has no CascadeClassifier (removed in OpenCV 5). "
+            "Install opencv-python<5."
+        )
+    cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    )
+    faces = cascade.detectMultiScale(
+        gray, scaleFactor=1.1, minNeighbors=5, minSize=(48, 48)
+    )
+    height, width = gray.shape
+    if len(faces) > 0:
+        x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+        pad = int(margin * max(w, h))
+        side = max(w, h) + 2 * pad
+        cx, cy = x + w // 2, y + h // 2
+    else:
+        print("Warning: no face detected, using the centre of the image.")
+        side = min(height, width)
+        cx, cy = width // 2, height // 2
+    side = min(side, height, width)
+    x0 = int(np.clip(cx - side // 2, 0, width - side))
+    y0 = int(np.clip(cy - side // 2, 0, height - side))
+    return gray[y0 : y0 + side, x0 : x0 + side]
+
+
+def preprocess(gray):
+    """Crop the face, resize to 48x48 and scale to a (1, 48, 48, 1) batch."""
+    face = crop_face(gray)
+    resized = cv2.resize(face, IMG_SIZE, interpolation=cv2.INTER_AREA)
+    return (resized.astype("float32") / 255.0)[np.newaxis, :, :, np.newaxis]
+
+
+def report(model, class_labels, gray):
+    """Classify a grayscale image and print the top emotion plus all scores."""
+    predictions = model.predict(preprocess(gray), verbose=0)[0]
+    class_idx = int(np.argmax(predictions))
+    print(f"Detected Emotion: {class_labels[class_idx]} ({predictions[class_idx] * 100:.2f}%)")
+    for i in np.argsort(predictions)[::-1]:
+        print(f"  {class_labels[i]:<10} {predictions[i] * 100:6.2f}%")
+
+
 def predict_image(model, class_labels, image_path):
     """Classify the emotion in an image file (works without a webcam, e.g. Colab)."""
     gray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if gray is None:
         raise FileNotFoundError(f"Could not read image: {image_path}")
-    resized = cv2.resize(gray, IMG_SIZE)
-    batch = (resized.astype("float32") / 255.0)[np.newaxis, :, :, np.newaxis]
-
-    predictions = model.predict(batch)
-    class_idx = int(np.argmax(predictions[0]))
-    confidence = predictions[0][class_idx] * 100
-    print(f"Detected Emotion: {class_labels[class_idx]} ({confidence:.2f}%)")
+    report(model, class_labels, gray)
 
 
 def capture_and_predict(model, class_labels):
@@ -151,14 +208,7 @@ def capture_and_predict(model, class_labels):
         key = cv2.waitKey(1) & 0xFF
         if key == 32:  # SPACE
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            resized = cv2.resize(gray, IMG_SIZE)
-            normalized = resized.astype("float32") / 255.0
-            batch = normalized[np.newaxis, :, :, np.newaxis]
-
-            predictions = model.predict(batch)
-            class_idx = int(np.argmax(predictions[0]))
-            confidence = predictions[0][class_idx] * 100
-            print(f"Detected Emotion: {class_labels[class_idx]} ({confidence:.2f}%)")
+            report(model, class_labels, gray)
             break
         elif key == ord("q"):
             break

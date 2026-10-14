@@ -137,7 +137,8 @@ Training writes `emotion_model.keras` and `class_labels.json` to the working dir
 
 ## 📝 Notes
 
-* The webcam demo and image prediction classify the whole image, not a cropped face. For better accuracy, add face detection (for example OpenCV's Haar cascades) and crop to the face before resizing.
+* Prediction detects the largest face with OpenCV's Haar cascade and crops to it before resizing to 48x48, matching the tightly cropped training images. This needs `opencv-python<5` (OpenCV 5 removed `CascadeClassifier`). If no face is found it falls back to the centre of the image and prints a warning. All class probabilities are printed, not just the top one.
+* Retrain after updating: the model now has batch normalisation, an extra conv block and class-weighted loss, so older `emotion_model.keras` files will not match the new training.
 * This is a learning project, not a production-grade emotion recogniser.
 
 ---

@@ -20,13 +20,14 @@ You can run and test this project directly in Google Colab using free GPU accele
 %cd emotion-detection
 
 # Download the dataset from Kaggle
-import os
-if not (os.path.exists(os.path.expanduser('~/.kaggle/kaggle.json')) or os.environ.get('KAGGLE_KEY')):
-    # Only runs if Colab has no Kaggle credentials: upload your kaggle.json API token
+import subprocess
+cmd = ['kaggle', 'datasets', 'download', '-d', 'msambare/fer2013', '-p', 'emotion_detection_data', '--unzip']
+if subprocess.run(cmd).returncode != 0:
+    # Download failed (usually missing credentials): upload your kaggle.json API token, then retry
     from google.colab import files
     files.upload()
     !mkdir -p ~/.kaggle && mv kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
-!kaggle datasets download -d msambare/fer2013 -p emotion_detection_data --unzip
+    subprocess.run(cmd, check=True)
 
 # Train the model
 !python emotion_detection.py train --epochs 15
@@ -40,7 +41,7 @@ files.upload()  # select e.g. face.jpg
 !python emotion_detection.py predict --image face.jpg
 ```
 
-> **Note:** The dataset download only asks you to upload a `kaggle.json` token if Colab has no Kaggle credentials yet (you can create one under Kaggle > Settings > API). TensorFlow and OpenCV come pre-installed in Colab, so there is no need to run `pip install`. Colab also cannot open a local webcam window, which is why predictions use an uploaded image file. Colab sessions are temporary, so download `emotion_model.keras` and `class_labels.json` before the runtime disconnects.
+> **Note:** The dataset download only asks you to upload a `kaggle.json` token if the first download attempt fails, which is usually down to missing Kaggle credentials (you can create a token under Kaggle > Settings > API). TensorFlow and OpenCV come pre-installed in Colab, so there is no need to run `pip install`. Colab also cannot open a local webcam window, which is why predictions use an uploaded image file. Colab sessions are temporary, so download `emotion_model.keras` and `class_labels.json` before the runtime disconnects.
 
 ---
 

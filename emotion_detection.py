@@ -67,18 +67,24 @@ def build_test_generator(test_dir, batch_size=64):
 
 
 def build_model(num_classes):
-    """Three conv/pool blocks (with batch norm) and a dense classifier head."""
+    """Three conv/pool blocks (with batch norm) and a dense classifier head.
+
+    momentum=0.9 (instead of Keras' default 0.99) lets batch norm's running
+    statistics keep up with the weights as they change. With the default, the
+    statistics can lag behind and the model scores well while training but
+    predicts badly afterwards (often collapsing onto one emotion).
+    """
     model = Sequential(
         [
             Input(shape=(*IMG_SIZE, 1)),
             Conv2D(32, (3, 3), padding="same", activation="relu"),
-            BatchNormalization(),
+            BatchNormalization(momentum=0.9),
             MaxPooling2D(pool_size=(2, 2)),
             Conv2D(64, (3, 3), padding="same", activation="relu"),
-            BatchNormalization(),
+            BatchNormalization(momentum=0.9),
             MaxPooling2D(pool_size=(2, 2)),
             Conv2D(128, (3, 3), padding="same", activation="relu"),
-            BatchNormalization(),
+            BatchNormalization(momentum=0.9),
             MaxPooling2D(pool_size=(2, 2)),
             Flatten(),
             Dense(256, activation="relu"),
@@ -111,7 +117,7 @@ def train(train_dir, test_dir, epochs=30, batch_size=64):
     callbacks = [
         # Stop when validation accuracy stops improving and keep the best weights.
         EarlyStopping(
-            monitor="val_accuracy", patience=6, restore_best_weights=True, verbose=1
+            monitor="val_accuracy", patience=10, restore_best_weights=True, verbose=1
         ),
         # Lower the learning rate when validation loss plateaus.
         ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=3, verbose=1),

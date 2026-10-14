@@ -85,7 +85,7 @@ The model follows a standard deep-learning pipeline for image classification:
 
 1. **Feature Extraction (Convolutional Layers):**
    * Input images pass through three `Conv2D` layers (32, 64 and 128 filters) with ReLU activations to extract visual features such as edges, curves and facial shapes.
-   * `BatchNormalization` after each convolution stabilises and speeds up training.
+   * `BatchNormalization` after each convolution stabilises and speeds up training. It uses `momentum=0.9` so its running statistics keep up as the weights change; with Keras' default (0.99) the model can score well during training but predict badly afterwards, often collapsing onto a single emotion.
    * `MaxPooling2D` layers reduce spatial dimensions while retaining key features, making the model computationally efficient and tolerant of slight positional shifts.
 
 2. **Classification (Fully Connected Layers):**

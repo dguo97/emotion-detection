@@ -29,8 +29,8 @@ if subprocess.run(cmd).returncode != 0:
     !mkdir -p ~/.kaggle && mv kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
     subprocess.run(cmd, check=True)
 
-# Train the model
-!python emotion_detection.py train --epochs 15
+# Train the model (this also prints accuracy per emotion on the test set at the end)
+!python emotion_detection.py train
 ```
 
 5. Once training has finished, upload a photo of a face in a new cell and classify it:
@@ -38,7 +38,15 @@ if subprocess.run(cmd).returncode != 0:
 ```bash
 from google.colab import files
 files.upload()  # select e.g. face.jpg
-!python emotion_detection.py predict --image face.jpg
+!python emotion_detection.py predict --image face.jpg --save-crop crop.png
+```
+
+6. Optional: look at the exact 48x48 face the model saw, and re-run the per-emotion test report at any time:
+
+```bash
+from IPython.display import Image
+display(Image('crop.png'))
+!python emotion_detection.py evaluate
 ```
 
 > **Note:** The dataset download only asks you to upload a `kaggle.json` token if the first download attempt fails, which is usually down to missing Kaggle credentials (you can create a token under Kaggle > Settings > API). TensorFlow and OpenCV come pre-installed in Colab, so there is no need to run `pip install`. Colab also cannot open a local webcam window, which is why predictions use an uploaded image file. Colab sessions are temporary, so download `emotion_model.keras` and `class_labels.json` before the runtime disconnects.
@@ -76,19 +84,24 @@ emotion_detection_data/
 The model follows a standard deep-learning pipeline for image classification:
 
 1. **Feature Extraction (Convolutional Layers):**
-   * Input images pass through two `Conv2D` layers (32 and 64 filters) with ReLU activations to extract visual features such as edges, curves and facial shapes.
+   * Input images pass through three `Conv2D` layers (32, 64 and 128 filters) with ReLU activations to extract visual features such as edges, curves and facial shapes.
+   * `BatchNormalization` after each convolution stabilises and speeds up training.
    * `MaxPooling2D` layers reduce spatial dimensions while retaining key features, making the model computationally efficient and tolerant of slight positional shifts.
 
 2. **Classification (Fully Connected Layers):**
    * Extracted feature maps are flattened into a single feature vector.
-   * A 128-unit dense layer with 50% dropout feeds a softmax output layer that gives a probability for each emotion class.
+   * A 256-unit dense layer with 50% dropout feeds a softmax output layer that gives a probability for each emotion class.
 
 3. **Training & Optimization:**
    * **Data Augmentation:** The training set is augmented with shear, zoom and horizontal flips to reduce overfitting.
    * **Loss Function:** Categorical Cross-Entropy evaluates the difference between predicted class probabilities and ground-truth targets.
-   * **Optimizer:** Adam iteratively updates network weights via backpropagation to minimize error (15 epochs by default).
+   * **Class Weights:** FER-2013 is imbalanced (many `happy` images, very few `disgust`), so the loss is weighted to stop rare emotions being ignored.
+   * **Optimizer:** Adam iteratively updates network weights via backpropagation to minimize error. Training runs for up to 30 epochs, halving the learning rate when validation loss stalls and stopping early (keeping the best weights) when validation accuracy stops improving.
 
-4. **Inference:**
+4. **Evaluation:**
+   * After training, the model is scored on the test set: overall accuracy, accuracy per emotion, a confusion matrix and the share of predictions given to each emotion. Run it again any time with `python emotion_detection.py evaluate`.
+
+5. **Inference:**
    * Press SPACE in the webcam window to grab a frame, or pass an image file. It is converted to grayscale, the largest face is detected (OpenCV Haar cascade) and cropped, then resized to 48x48 and classified. If no face is found, the centre of the image is used.
    * The probability of every emotion class is printed, not just the top one, so you can see how confident the model is.
 
@@ -109,17 +122,23 @@ pip install -r requirements.txt
 Then place the dataset in `emotion_detection_data/` (see above) and run:
 
 ```bash
-# Train, save the model, then open the webcam for a prediction
+# Train, evaluate, then open the webcam for a prediction
 python emotion_detection.py
 
-# Train only
-python emotion_detection.py train --epochs 20
+# Train (and evaluate) only
+python emotion_detection.py train --epochs 40
+
+# Per-emotion accuracy and confusion matrix for a saved model
+python emotion_detection.py evaluate
 
 # Predict from the webcam using a previously saved model
 python emotion_detection.py predict
 
 # Predict from an image file instead of the webcam
 python emotion_detection.py predict --image face.jpg
+
+# Also save the 48x48 face crop the model sees, to check it looks right
+python emotion_detection.py predict --image face.jpg --save-crop crop.png
 ```
 
 ### Options
@@ -128,9 +147,10 @@ python emotion_detection.py predict --image face.jpg
 | --- | --- | --- |
 | `--train-dir` | `emotion_detection_data/train` | Training images directory |
 | `--test-dir` | `emotion_detection_data/test` | Validation images directory |
-| `--epochs` | `15` | Number of training epochs |
+| `--epochs` | `30` | Maximum number of training epochs (early stopping may end it sooner) |
 | `--batch-size` | `64` | Batch size |
 | `--image` | none | Classify this image file instead of using the webcam |
+| `--save-crop` | none | Save the 48x48 face crop the model sees to this PNG path |
 
 Training writes `emotion_model.keras` and `class_labels.json` to the working directory.
 
@@ -139,8 +159,8 @@ Training writes `emotion_model.keras` and `class_labels.json` to the working dir
 ## 📝 Notes
 
 * Training images are tight 48x48 face crops, so predictions work best on a clear, front-facing, well-lit face. Faces are cropped automatically before prediction.
-* This is a small CNN trained for 15 epochs, so expect roughly 55-65% validation accuracy on FER-2013, with `happy` and `surprise` usually easier than `fear`, `sad` and `disgust`. Training more epochs or a deeper network will help.
-* If every image gives the same emotion, check the validation accuracy printed at the end of training: a value near 25% or lower suggests the model hasn't learned much.
+* This is a small CNN, so expect accuracy in the region of 55-65% on FER-2013, with `happy` and `surprise` usually easier than `fear`, `sad` and `disgust`. These figures are a rough guide, not a measured result for this exact model, so check your own `evaluate` output.
+* **If every photo gets the same emotion:** run `python emotion_detection.py evaluate`. If the per-emotion accuracy is poor (or one emotion takes most of the predictions), the model hasn't learned well and needs more or better training. If it scores well on the test set but still fails on your own photos, use `--save-crop` to check the face crop, and try a front-facing, evenly lit photo, since FER-2013 images are small, low-quality faces and studio photos can look different to the model.
 * This is a learning project, not a production-grade emotion recogniser.
 
 ---

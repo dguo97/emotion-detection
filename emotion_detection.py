@@ -101,7 +101,7 @@ def build_model(num_classes):
     return model
 
 
-def train(train_dir, test_dir, epochs=30, batch_size=64):
+def train(train_dir, test_dir, epochs=50, batch_size=64):
     """Train the model and save it together with its class labels."""
     train_generator, test_generator = build_generators(
         train_dir, test_dir, batch_size
@@ -131,13 +131,15 @@ def train(train_dir, test_dir, epochs=30, batch_size=64):
         ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=3, verbose=1),
     ]
 
+    # Do not pass steps_per_epoch / validation_steps. With samples // batch_size,
+    # one batch is left over each pass, so every second epoch trained on a single
+    # batch ("input ran out of data") and half the epochs were wasted. Letting
+    # Keras use the generator's own length gives every epoch a full pass.
     model.fit(
         train_generator,
         class_weight=class_weight,
-        steps_per_epoch=train_generator.samples // train_generator.batch_size,
         epochs=epochs,
         validation_data=test_generator,
-        validation_steps=test_generator.samples // test_generator.batch_size,
         callbacks=callbacks,
     )
 
@@ -391,7 +393,7 @@ def main():
     )
     parser.add_argument("--train-dir", default="emotion_detection_data/train")
     parser.add_argument("--test-dir", default="emotion_detection_data/test")
-    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument(
         "--image",

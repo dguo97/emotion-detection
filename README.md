@@ -96,7 +96,7 @@ The model follows a standard deep-learning pipeline for image classification:
    * **Data Augmentation:** The training set is augmented with shear, zoom and horizontal flips to reduce overfitting.
    * **Loss Function:** Categorical Cross-Entropy evaluates the difference between predicted class probabilities and ground-truth targets.
    * **Class Weights:** FER-2013 is imbalanced (many `happy` images, very few `disgust`), so the loss is weighted to stop rare emotions being ignored.
-   * **Optimizer:** Adam iteratively updates network weights via backpropagation to minimize error. Training runs for up to 30 epochs, halving the learning rate when validation loss stalls and stopping early (keeping the best weights) when validation accuracy stops improving. Early stopping only starts after a 15-epoch warm-up, because validation scores in the first epochs are unreliable and stopping then can lock in a model that guesses a single emotion.
+   * **Optimizer:** Adam iteratively updates network weights via backpropagation to minimize error. Training runs for up to 50 epochs, halving the learning rate when validation loss stalls and stopping early (keeping the best weights) when validation accuracy stops improving. Early stopping only starts after a 15-epoch warm-up, because validation scores in the first epochs are unreliable and stopping then can lock in a model that guesses a single emotion.
 
 4. **Evaluation:**
    * After training, the model is scored on the test set: overall accuracy, accuracy per emotion, a confusion matrix and the share of predictions given to each emotion. Run it again any time with `python emotion_detection.py evaluate`.
@@ -147,7 +147,7 @@ python emotion_detection.py predict --image face.jpg --save-crop crop.png
 | --- | --- | --- |
 | `--train-dir` | `emotion_detection_data/train` | Training images directory |
 | `--test-dir` | `emotion_detection_data/test` | Validation images directory |
-| `--epochs` | `30` | Maximum number of training epochs (early stopping may end it sooner) |
+| `--epochs` | `50` | Maximum number of training epochs (early stopping may end it sooner) |
 | `--batch-size` | `64` | Batch size |
 | `--image` | none | Classify this image file instead of using the webcam |
 | `--save-crop` | none | Save the 48x48 face crop the model sees to this PNG path |
@@ -158,8 +158,8 @@ Training writes `emotion_model.keras` and `class_labels.json` to the working dir
 
 ## 📝 Notes
 
-* Training images are tight 48x48 face crops, so predictions work best on a clear, front-facing, well-lit face. Faces are cropped automatically before prediction, and `--save-crop` lets you check the crop. The happy / sad model above classified all six test selfies correctly (three smiles as happy, three pouts as sad), including dark, close-up and angled shots.
-* The script works with any set of emotion folders. Trained on a **happy / sad** subset of FER-2013 (12,045 training and 3,021 test images), this model reached **90.2% test accuracy** (happy 90.8%, sad 89.3%) and 94.8% on the training images. With all seven emotions the task is much harder: expect noticeably lower accuracy (small CNNs typically land around 55-65% on FER-2013, with `happy` and `surprise` easier than `fear`, `sad` and `disgust`). That seven-emotion figure is a rough guide rather than a measured result for this model, so check your own `evaluate` output.
+* Training images are tight 48x48 face crops, so predictions work best on a clear, front-facing, well-lit face. Faces are cropped automatically before prediction, and `--save-crop` lets you check the crop. On nine informal test selfies (five smiles, four pouts, including dark, close-up and angled shots) the happy / sad model got 8 or 9 right depending on the training run; the hard cases are dark, low-angle pouts, where it can be close to a coin flip. Results vary a little between training runs.
+* The script works with any set of emotion folders. Trained on a **happy / sad** subset of FER-2013 (12,045 training and 3,021 test images), this model reached about **90.9% test accuracy** (happy 91.0%, sad 90.8%). With all seven emotions the task is much harder: expect noticeably lower accuracy (small CNNs typically land around 55-65% on FER-2013, with `happy` and `surprise` easier than `fear`, `sad` and `disgust`). That seven-emotion figure is a rough guide rather than a measured result for this model, so check your own `evaluate` output.
 * **If every photo gets the same emotion:** run `python emotion_detection.py evaluate`. If the per-emotion accuracy is poor (or one emotion takes most of the predictions), the model hasn't learned well and needs more or better training. If it scores well on the test set but still fails on your own photos, use `--save-crop` to check the face crop, and try a front-facing, evenly lit photo, since FER-2013 images are small, low-quality faces and studio photos can look different to the model.
 * This is a learning project, not a production-grade emotion recogniser.
 

@@ -95,8 +95,8 @@ The model follows a standard deep-learning pipeline for image classification:
 3. **Training & Optimization:**
    * **Data Augmentation:** The training set is augmented with shear, zoom and horizontal flips to reduce overfitting.
    * **Loss Function:** Categorical Cross-Entropy evaluates the difference between predicted class probabilities and ground-truth targets.
-   * **Class Weights:** FER-2013 is imbalanced (many `happy` images, very few `disgust`), so the loss is weighted to stop rare emotions being ignored.
-   * **Optimizer:** Adam iteratively updates network weights via backpropagation to minimize error. Training runs for up to 50 epochs, halving the learning rate when validation loss stalls and stopping early (keeping the best weights) when validation accuracy stops improving. Early stopping only starts after a 15-epoch warm-up, because validation scores in the first epochs are unreliable and stopping then can lock in a model that guesses a single emotion.
+   * **Class Weights:** FER-2013 is imbalanced (many `happy` images, very few `disgust`), so the loss is weighted (softened with a square root so `disgust`, with only ~100 images, does not dominate early training) to stop rare emotions being ignored.
+   * **Optimizer:** Adam iteratively updates network weights via backpropagation to minimize error. Training runs for up to 80 epochs, halving the learning rate when validation loss stalls and stopping early (keeping the best weights) when validation accuracy stops improving. Early stopping only starts after a 15-epoch warm-up, because validation scores in the first epochs are unreliable and stopping then can lock in a model that guesses a single emotion.
 
 4. **Evaluation:**
    * After training, the model is scored on the test set: overall accuracy, accuracy per emotion, a confusion matrix and the share of predictions given to each emotion. Run it again any time with `python emotion_detection.py evaluate`.
@@ -147,7 +147,7 @@ python emotion_detection.py predict --image face.jpg --save-crop crop.png
 | --- | --- | --- |
 | `--train-dir` | `emotion_detection_data/train` | Training images directory |
 | `--test-dir` | `emotion_detection_data/test` | Validation images directory |
-| `--epochs` | `50` | Maximum number of training epochs (early stopping may end it sooner) |
+| `--epochs` | `80` | Maximum number of training epochs (early stopping may end it sooner) |
 | `--batch-size` | `64` | Batch size |
 | `--image` | none | Classify this image file instead of using the webcam |
 | `--save-crop` | none | Save the 48x48 face crop the model sees to this PNG path |

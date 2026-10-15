@@ -101,7 +101,7 @@ def build_model(num_classes):
     return model
 
 
-def train(train_dir, test_dir, epochs=50, batch_size=64):
+def train(train_dir, test_dir, epochs=80, batch_size=64):
     """Train the model and save it together with its class labels."""
     train_generator, test_generator = build_generators(
         train_dir, test_dir, batch_size
@@ -109,10 +109,13 @@ def train(train_dir, test_dir, epochs=50, batch_size=64):
     model = build_model(train_generator.num_classes)
 
     # FER-2013 is imbalanced (lots of "happy", very few "disgust"); weight the
-    # loss so rare classes are not ignored.
+    # loss so rare classes are not ignored. The usual "balanced" weights give
+    # disgust ~9x the weight of an average class, which makes early training
+    # swing wildly towards it, so the square root is used to soften them.
     counts = np.bincount(train_generator.classes, minlength=train_generator.num_classes)
     class_weight = {
-        i: len(train_generator.classes) / (len(counts) * c) for i, c in enumerate(counts)
+        i: float(np.sqrt(len(train_generator.classes) / (len(counts) * c)))
+        for i, c in enumerate(counts)
     }
 
     callbacks = [
@@ -393,7 +396,7 @@ def main():
     )
     parser.add_argument("--train-dir", default="emotion_detection_data/train")
     parser.add_argument("--test-dir", default="emotion_detection_data/test")
-    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument(
         "--image",

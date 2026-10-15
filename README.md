@@ -159,7 +159,7 @@ Training writes `emotion_model.keras` and `class_labels.json` to the working dir
 ## 📝 Notes
 
 * Training images are tight 48x48 face crops, so predictions work best on a clear, front-facing, well-lit face. Faces are cropped automatically before prediction.
-* This is a small CNN, so expect accuracy in the region of 55-65% on FER-2013, with `happy` and `surprise` usually easier than `fear`, `sad` and `disgust`. These figures are a rough guide, not a measured result for this exact model, so check your own `evaluate` output.
+* The script works with any set of emotion folders. Trained on a **happy / sad** subset of FER-2013 (12,045 training and 3,021 test images), this model reached **90.2% test accuracy** (happy 90.8%, sad 89.3%) and 94.8% on the training images. With all seven emotions the task is much harder: expect noticeably lower accuracy (small CNNs typically land around 55-65% on FER-2013, with `happy` and `surprise` easier than `fear`, `sad` and `disgust`). That seven-emotion figure is a rough guide rather than a measured result for this model, so check your own `evaluate` output.
 * **If every photo gets the same emotion:** run `python emotion_detection.py evaluate`. If the per-emotion accuracy is poor (or one emotion takes most of the predictions), the model hasn't learned well and needs more or better training. If it scores well on the test set but still fails on your own photos, use `--save-crop` to check the face crop, and try a front-facing, evenly lit photo, since FER-2013 images are small, low-quality faces and studio photos can look different to the model.
 * This is a learning project, not a production-grade emotion recogniser.
 

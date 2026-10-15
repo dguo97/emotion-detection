@@ -37,7 +37,7 @@ MODEL_PATH = "emotion_model.keras"
 LABELS_PATH = "class_labels.json"
 
 
-def build_generators(train_dir, test_dir, batch_size=64):
+def build_generators(train_dir, test_dir, batch_size=64, classes=None):
     """Create augmented training and plain test data generators."""
     train_datagen = ImageDataGenerator(
         rescale=1.0 / 255,
@@ -51,11 +51,12 @@ def build_generators(train_dir, test_dir, batch_size=64):
         batch_size=batch_size,
         color_mode="grayscale",
         class_mode="categorical",
+        classes=classes,
     )
-    return train_generator, build_test_generator(test_dir, batch_size)
+    return train_generator, build_test_generator(test_dir, batch_size, classes)
 
 
-def build_test_generator(test_dir, batch_size=64):
+def build_test_generator(test_dir, batch_size=64, classes=None):
     """Plain (unaugmented, unshuffled) generator so predictions line up with labels."""
     return ImageDataGenerator(rescale=1.0 / 255).flow_from_directory(
         test_dir,
@@ -63,6 +64,7 @@ def build_test_generator(test_dir, batch_size=64):
         batch_size=batch_size,
         color_mode="grayscale",
         class_mode="categorical",
+        classes=classes,
         shuffle=False,
     )
 
@@ -101,10 +103,10 @@ def build_model(num_classes):
     return model
 
 
-def train(train_dir, test_dir, epochs=80, batch_size=64):
+def train(train_dir, test_dir, epochs=80, batch_size=64, classes=None):
     """Train the model and save it together with its class labels."""
     train_generator, test_generator = build_generators(
-        train_dir, test_dir, batch_size
+        train_dir, test_dir, batch_size, classes
     )
     model = build_model(train_generator.num_classes)
 
@@ -173,7 +175,7 @@ def evaluate(model, class_labels, test_dir, batch_size=64):
     well here but fails on your own photos, the problem is the photos (lighting,
     angle, face crop); if it scores badly here, the problem is the training.
     """
-    test_generator = build_test_generator(test_dir, batch_size)
+    test_generator = build_test_generator(test_dir, batch_size, list(class_labels))
     test_labels = list(test_generator.class_indices.keys())
     if test_labels != list(class_labels):
         raise ValueError(
@@ -396,6 +398,14 @@ def main():
     )
     parser.add_argument("--train-dir", default="emotion_detection_data/train")
     parser.add_argument("--test-dir", default="emotion_detection_data/test")
+    parser.add_argument(
+        "--classes",
+        nargs="+",
+        default=None,
+        metavar="EMOTION",
+        help="train on only these emotion folders, e.g. --classes happy sad "
+        "(default: every folder found)",
+    )
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument(
@@ -412,7 +422,7 @@ def main():
 
     if args.mode in ("train", "all"):
         model, class_labels = train(
-            args.train_dir, args.test_dir, args.epochs, args.batch_size
+            args.train_dir, args.test_dir, args.epochs, args.batch_size, args.classes
         )
     else:
         model, class_labels = load_trained()

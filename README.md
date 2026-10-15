@@ -29,9 +29,16 @@ if subprocess.run(cmd).returncode != 0:
     !mkdir -p ~/.kaggle && mv kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
     subprocess.run(cmd, check=True)
 
-# Train the model (this also prints accuracy per emotion on the test set at the end)
-!python emotion_detection.py train
+# Option A (simpler, more accurate): train on happy and sad only
+!python emotion_detection.py train --classes happy sad
+
+# Option B: train on all 7 emotions instead (harder, less accurate - see the note below)
+# !python emotion_detection.py train
 ```
+
+Both options print accuracy per emotion on the test set at the end. Run one of them, not both.
+
+> **Which option should I pick?** Option A is much more accurate (about **91%** test accuracy, measured). Option B recognises seven emotions but scores only around **50-60%**. Fewer categories means fewer ways to be wrong, and the emotions that Option B adds are the hardest ones: `fear`, `angry` and `sad` look very alike at 48x48 pixels and are often confused with each other and with `neutral`, and `disgust` has only about 100 training images. `happy` and `surprise` have distinctive faces, so they are recognised well either way.
 
 5. Once training has finished, upload a photo of a face in a new cell and classify it:
 
@@ -128,6 +135,9 @@ python emotion_detection.py
 # Train (and evaluate) only
 python emotion_detection.py train --epochs 40
 
+# Happy / sad only (more accurate than using all 7 emotions)
+python emotion_detection.py train --classes happy sad
+
 # Per-emotion accuracy and confusion matrix for a saved model
 python emotion_detection.py evaluate
 
@@ -147,6 +157,7 @@ python emotion_detection.py predict --image face.jpg --save-crop crop.png
 | --- | --- | --- |
 | `--train-dir` | `emotion_detection_data/train` | Training images directory |
 | `--test-dir` | `emotion_detection_data/test` | Validation images directory |
+| `--classes` | all folders found | Train on only these emotion folders, e.g. `--classes happy sad` |
 | `--epochs` | `80` | Maximum number of training epochs (early stopping may end it sooner) |
 | `--batch-size` | `64` | Batch size |
 | `--image` | none | Classify this image file instead of using the webcam |

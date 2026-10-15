@@ -44,9 +44,12 @@ Both options print accuracy per emotion on the test set at the end. Run one of t
 
 ```bash
 from google.colab import files
-files.upload()  # select e.g. face.jpg
-!python emotion_detection.py predict --image face.jpg --save-crop crop.png
+uploaded = files.upload()          # choose your photo, whatever it is called
+photo = next(iter(uploaded))       # the uploaded file's name
+!python emotion_detection.py predict --image "{photo}" --save-crop crop.png
 ```
+
+The photo's name is picked up automatically, so you don't need to rename it. If you see `Could not read image`, the name in `--image` doesn't match the file you uploaded (check the file list on the left of Colab).
 
 6. Optional: look at the exact 48x48 face the model saw, and re-run the per-emotion test report at any time:
 

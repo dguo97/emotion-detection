@@ -355,7 +355,10 @@ def predict_image(model, class_labels, image_path, save_crop=None):
     """Classify the emotion in an image file (works without a webcam, e.g. Colab)."""
     image = cv2.imread(image_path)
     if image is None:
-        raise FileNotFoundError(f"Could not read image: {image_path}")
+        raise FileNotFoundError(
+            f"Could not read image: {image_path} (check the file name and that "
+            "it is in the current directory, and that it is a valid image)"
+        )
     classify(model, class_labels, image, save_crop)
 
 

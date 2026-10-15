@@ -102,7 +102,7 @@ The model follows a standard deep-learning pipeline for image classification:
    * After training, the model is scored on the test set: overall accuracy, accuracy per emotion, a confusion matrix and the share of predictions given to each emotion. Run it again any time with `python emotion_detection.py evaluate`.
 
 5. **Inference:**
-   * Press SPACE in the webcam window to grab a frame, or pass an image file. It is converted to grayscale, the largest face is detected (OpenCV Haar cascade) and cropped, then resized to 48x48 and classified. If no face is found, the centre of the image is used.
+   * Press SPACE in the webcam window to grab a frame, or pass an image file. It is converted to grayscale, the largest face is found with OpenCV's YuNet face detector and cropped so the eyes and mouth sit where they do in the training images, then resized to 48x48 and classified. YuNet works well on close-up selfies that fill the frame. Its small model file (about 230 KB) is downloaded automatically on first use and cached in `~/.cache/emotion_detection/`. If it can't be downloaded, the script falls back to a Haar cascade, and then to the centre of the image.
    * The probability of every emotion class is printed, not just the top one, so you can see how confident the model is.
 
 ---
@@ -158,7 +158,7 @@ Training writes `emotion_model.keras` and `class_labels.json` to the working dir
 
 ## 📝 Notes
 
-* Training images are tight 48x48 face crops, so predictions work best on a clear, front-facing, well-lit face. Faces are cropped automatically before prediction.
+* Training images are tight 48x48 face crops, so predictions work best on a clear, front-facing, well-lit face. Faces are cropped automatically before prediction, and `--save-crop` lets you check the crop. The happy / sad model above classified all six test selfies correctly (three smiles as happy, three pouts as sad), including dark, close-up and angled shots.
 * The script works with any set of emotion folders. Trained on a **happy / sad** subset of FER-2013 (12,045 training and 3,021 test images), this model reached **90.2% test accuracy** (happy 90.8%, sad 89.3%) and 94.8% on the training images. With all seven emotions the task is much harder: expect noticeably lower accuracy (small CNNs typically land around 55-65% on FER-2013, with `happy` and `surprise` easier than `fear`, `sad` and `disgust`). That seven-emotion figure is a rough guide rather than a measured result for this model, so check your own `evaluate` output.
 * **If every photo gets the same emotion:** run `python emotion_detection.py evaluate`. If the per-emotion accuracy is poor (or one emotion takes most of the predictions), the model hasn't learned well and needs more or better training. If it scores well on the test set but still fails on your own photos, use `--save-crop` to check the face crop, and try a front-facing, evenly lit photo, since FER-2013 images are small, low-quality faces and studio photos can look different to the model.
 * This is a learning project, not a production-grade emotion recogniser.

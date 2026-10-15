@@ -15,6 +15,7 @@ Usage:
 import argparse
 import json
 import os
+import urllib.request
 
 import cv2
 import numpy as np
@@ -200,48 +201,130 @@ def evaluate(model, class_labels, test_dir, batch_size=64):
         print(f"  {label:<10} {share[i]:6.2f}%")
 
 
-def crop_face(gray, margin=0.1):
-    """Return a square crop around the largest detected face.
+YUNET_URL = (
+    "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/"
+    "models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+)
+YUNET_PATH = os.path.join(
+    os.path.expanduser("~"), ".cache", "emotion_detection", "face_detection_yunet_2023mar.onnx"
+)
 
-    The training images are tight 48x48 face crops, so the model must be given
-    the same kind of input. Feeding a whole photo shrinks the face to a few
-    pixels and distorts non-square images. If no face is found, the largest
-    centred square is used instead.
+
+def get_yunet_model():
+    """Return the path to the YuNet face detector model, downloading it on first use.
+
+    The model is small (about 230 KB). Returns None if it cannot be downloaded,
+    in which case the caller falls back to a Haar cascade.
     """
-    if not hasattr(cv2, "CascadeClassifier"):
-        raise RuntimeError(
-            "This OpenCV build has no CascadeClassifier (removed in OpenCV 5). "
-            "Install opencv-python<5."
-        )
+    if os.path.exists(YUNET_PATH) and os.path.getsize(YUNET_PATH) > 100_000:
+        return YUNET_PATH
+    partial = YUNET_PATH + ".part"
+    try:
+        os.makedirs(os.path.dirname(YUNET_PATH), exist_ok=True)
+        urllib.request.urlretrieve(YUNET_URL, partial)
+        if os.path.getsize(partial) < 100_000:
+            raise OSError("the downloaded file is too small to be the model")
+        os.replace(partial, YUNET_PATH)
+        return YUNET_PATH
+    except Exception as error:  # offline, blocked, read-only disk, ...
+        if os.path.exists(partial):
+            os.remove(partial)
+        print(f"Warning: could not download the YuNet face detector ({error}).")
+        return None
+
+
+def square_crop(gray, cx, cy, side):
+    """Crop a square of the given size centred on (cx, cy), kept inside the image."""
+    height, width = gray.shape
+    side = int(min(side, height, width))
+    x0 = int(np.clip(cx - side / 2, 0, width - side))
+    y0 = int(np.clip(cy - side / 2, 0, height - side))
+    return gray[y0 : y0 + side, x0 : x0 + side]
+
+
+def crop_face_yunet(image):
+    """Crop the largest face found by the YuNet detector, or return None.
+
+    YuNet copes with faces of any size, including close-up selfies that fill
+    the frame, which the older Haar cascade often gets wrong. The crop is placed
+    using the eye and mouth positions so the face is framed like the FER-2013
+    training images (eyes about a third of the way down, mouth about three
+    quarters of the way down).
+    """
+    if not hasattr(cv2, "FaceDetectorYN"):
+        return None
+    model_path = get_yunet_model()
+    if model_path is None:
+        return None
+
+    height, width = image.shape[:2]
+    scale = min(1.0, 640 / max(height, width))
+    small = image
+    if scale < 1:
+        small = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    detector = cv2.FaceDetectorYN.create(
+        model_path, "", (small.shape[1], small.shape[0]), 0.5, 0.3, 5
+    )
+    _, faces = detector.detect(small)
+    if faces is None or len(faces) == 0:
+        return None
+
+    face = max(faces, key=lambda f: f[2] * f[3]) / scale
+    eye_x = (face[4] + face[6]) / 2
+    eye_y = (face[5] + face[7]) / 2
+    mouth_y = (face[11] + face[13]) / 2
+    gap = max(mouth_y - eye_y, 1.0)  # eye-to-mouth distance sets the crop size
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return square_crop(gray, eye_x, eye_y + 0.4 * gap, 2.6 * gap)
+
+
+def crop_face_haar(gray, margin=0.1):
+    """Fallback: crop the largest face found by a Haar cascade, or return None."""
+    if not hasattr(cv2, "CascadeClassifier"):  # removed in OpenCV 5
+        return None
     cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     )
     faces = cascade.detectMultiScale(
         gray, scaleFactor=1.1, minNeighbors=5, minSize=(48, 48)
     )
+    if len(faces) == 0:
+        return None
+    x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+    side = max(w, h) + 2 * int(margin * max(w, h))
+    return square_crop(gray, x + w / 2, y + h / 2, side)
+
+
+def crop_face(image):
+    """Return a grayscale face crop from a BGR image.
+
+    The training images are tight 48x48 face crops, so the model must be given
+    the same kind of input. Feeding a whole photo shrinks the face to a few
+    pixels and distorts non-square images. Tries the YuNet detector first, then
+    a Haar cascade, then the largest centred square.
+    """
+    crop = crop_face_yunet(image)
+    if crop is not None:
+        return crop
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    crop = crop_face_haar(gray)
+    if crop is not None:
+        print("Note: using the older Haar face detector (less reliable on close-ups).")
+        return crop
+
+    print("Warning: no face detected, using the centre of the image.")
     height, width = gray.shape
-    if len(faces) > 0:
-        x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-        pad = int(margin * max(w, h))
-        side = max(w, h) + 2 * pad
-        cx, cy = x + w // 2, y + h // 2
-    else:
-        print("Warning: no face detected, using the centre of the image.")
-        side = min(height, width)
-        cx, cy = width // 2, height // 2
-    side = min(side, height, width)
-    x0 = int(np.clip(cx - side // 2, 0, width - side))
-    y0 = int(np.clip(cy - side // 2, 0, height - side))
-    return gray[y0 : y0 + side, x0 : x0 + side]
+    return square_crop(gray, width / 2, height / 2, min(height, width))
 
 
-def preprocess(gray, save_crop=None):
+def preprocess(image, save_crop=None):
     """Crop the face, resize to 48x48 and scale to a (1, 48, 48, 1) batch.
 
-    If save_crop is a path, the 48x48 face the model sees is saved there
-    (enlarged) so you can check it looks like a sensible face.
+    image is a BGR (colour) image. If save_crop is a path, the 48x48 face the
+    model sees is saved there (enlarged) so you can check it looks right.
     """
-    face = crop_face(gray)
+    face = crop_face(image)
     resized = cv2.resize(face, IMG_SIZE, interpolation=cv2.INTER_AREA)
     if save_crop:
         enlarged = cv2.resize(resized, (240, 240), interpolation=cv2.INTER_NEAREST)
@@ -250,9 +333,9 @@ def preprocess(gray, save_crop=None):
     return (resized.astype("float32") / 255.0)[np.newaxis, :, :, np.newaxis]
 
 
-def classify(model, class_labels, gray, save_crop=None):
+def classify(model, class_labels, image, save_crop=None):
     """Print the predicted emotion and the probability of every class."""
-    probabilities = model.predict(preprocess(gray, save_crop), verbose=0)[0]
+    probabilities = model.predict(preprocess(image, save_crop), verbose=0)[0]
     order = np.argsort(probabilities)[::-1]
     best = order[0]
     print(f"Detected Emotion: {class_labels[best]} ({probabilities[best] * 100:.2f}%)")
@@ -263,10 +346,10 @@ def classify(model, class_labels, gray, save_crop=None):
 
 def predict_image(model, class_labels, image_path, save_crop=None):
     """Classify the emotion in an image file (works without a webcam, e.g. Colab)."""
-    gray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    if gray is None:
+    image = cv2.imread(image_path)
+    if image is None:
         raise FileNotFoundError(f"Could not read image: {image_path}")
-    classify(model, class_labels, gray, save_crop)
+    classify(model, class_labels, image, save_crop)
 
 
 def capture_and_predict(model, class_labels, save_crop=None):
@@ -288,8 +371,7 @@ def capture_and_predict(model, class_labels, save_crop=None):
 
         key = cv2.waitKey(1) & 0xFF
         if key == 32:  # SPACE
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            classify(model, class_labels, gray, save_crop)
+            classify(model, class_labels, frame, save_crop)
             break
         elif key == ord("q"):
             break
